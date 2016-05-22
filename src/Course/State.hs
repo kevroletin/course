@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -39,8 +40,7 @@ instance Functor (State s) where
     (a -> b)
     -> State s a
     -> State s b
-  (<$>) =
-      error "todo: Course.State#(<$>)"
+  (<$>) f (State g) = State $ \s -> let (a', s') = g s in (f a', s')
 
 -- | Implement the `Applicative` instance for `State s`.
 --
@@ -57,14 +57,13 @@ instance Applicative (State s) where
   pure ::
     a
     -> State s a
-  pure =
-    error "todo: Course.State pure#instance (State s)"
+  pure x = State $ (,) x
   (<*>) ::
     State s (a -> b)
     -> State s a
-    -> State s b 
-  (<*>) =
-    error "todo: Course.State (<*>)#instance (State s)"
+    -> State s b
+  (<*>) (State f) x = State $ \s -> let (g, s') = f s
+                                    in runState (g <$> x) s'
 
 -- | Implement the `Bind` instance for `State s`.
 --
@@ -78,8 +77,7 @@ instance Monad (State s) where
     (a -> State s b)
     -> State s a
     -> State s b
-  (=<<) =
-    error "todo: Course.State (=<<)#instance (State s)"
+  (=<<) g (State h) = State $ \s -> let (a, s') = h s in runState (g a) s'
 
 -- | Run the `State` seeded with `s` and retrieve the resulting state.
 --
@@ -88,8 +86,7 @@ exec ::
   State s a
   -> s
   -> s
-exec =
-  error "todo: Course.State#exec"
+exec m s = let (_, s') = runState m s in s'
 
 -- | Run the `State` seeded with `s` and retrieve the resulting value.
 --
@@ -98,8 +95,7 @@ eval ::
   State s a
   -> s
   -> a
-eval =
-  error "todo: Course.State#eval"
+eval m s = let (a, _) = runState m s in a
 
 -- | A `State` where the state also distributes into the produced value.
 --
@@ -107,8 +103,7 @@ eval =
 -- (0,0)
 get ::
   State s s
-get =
-  error "todo: Course.State#get"
+get = State $ \s -> (s, s)
 
 -- | A `State` where the resulting state is seeded with the given value.
 --
@@ -117,8 +112,7 @@ get =
 put ::
   s
   -> State s ()
-put =
-  error "todo: Course.State#put"
+put s = State $ \_ -> ((), s)
 
 -- | Find the first element in a `List` that satisfies a given predicate.
 -- It is possible that no element is found, hence an `Optional` result.
@@ -139,8 +133,9 @@ findM ::
   (a -> f Bool)
   -> List a
   -> f (Optional a)
-findM =
-  error "todo: Course.State#findM"
+findM _ Nil = return Empty
+findM p (x :. xs) = p x >>= \ok -> if ok then return (Full x)
+                                   else findM p xs
 
 -- | Find the first element in a `List` that repeats.
 -- It is possible that no element repeats, hence an `Optional` result.
@@ -153,8 +148,9 @@ firstRepeat ::
   Ord a =>
   List a
   -> Optional a
-firstRepeat =
-  error "todo: Course.State#firstRepeat"
+firstRepeat xs = eval (findM check xs) S.empty
+  where
+    check a = get >>= \s -> put (S.insert a s) >> return (S.member a s)
 
 -- | Remove all duplicate elements in a `List`.
 -- /Tip:/ Use `filtering` and `State` with a @Data.Set#Set@.
@@ -166,8 +162,8 @@ distinct ::
   Ord a =>
   List a
   -> List a
-distinct =
-  error "todo: Course.State#distinct"
+distinct xs = eval (filtering check xs) S.empty
+  where check x = get >>= \s -> put (S.insert x s) >> return (not $ S.member x s)
 
 -- | A happy number is a positive integer, where the sum of the square of its digits eventually reaches 1 after repetition.
 -- In contrast, a sad number (not a happy number) is where the sum of the square of its digits never reaches 1
@@ -176,6 +172,7 @@ distinct =
 -- /Tip:/ Use `firstRepeat` with `produce`.
 --
 -- /Tip:/ Use `join` to write a @square@ function.
+
 --
 -- /Tip:/ Use library functions: @Optional#contains@, @Data.Char#digitToInt@.
 --
@@ -193,5 +190,27 @@ distinct =
 isHappy ::
   Integer
   -> Bool
-isHappy =
-  error "todo: Course.State#isHappy"
+isHappy x = case firstRepeat (produce squares x) of
+                Full 1 -> True
+                _      -> False
+  where
+    squares 0 = 0
+    squares n = let (d, v) = divMod n 10 in (v*v) + (squares d)
+
+-- not cool
+squareM :: State Integer Integer
+squareM = get >>= \s ->
+            if s == 0 then return 0
+            else let (d, v) = divMod s 10 in put d >>
+               squareM >>= \res -> return (res + v*v)
+
+-- better
+squareU x = foldLeft (+) 0 $ unfoldr go x
+  where go 0 = Empty
+        go y = let (d, m) = divMod y 10 in Full (m*m, d)
+
+-- TODO: how to apply join ? One possible solution is to
+-- generate list of lists and concat into plain list:
+-- join ((1 :. Nil) :. (2 :. Nil) :. Nil)
+-- [1,2]
+-- But I don't see how to simply generate
