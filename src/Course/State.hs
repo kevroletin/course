@@ -205,6 +205,7 @@ squareM = get >>= \s ->
                squareM >>= \res -> return (res + v*v)
 
 -- better
+squareU :: Integer -> Integer
 squareU x = foldLeft (+) 0 $ unfoldr go x
   where go 0 = Empty
         go y = let (d, m) = divMod y 10 in Full (m*m, d)
