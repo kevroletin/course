@@ -249,8 +249,8 @@ data Logger l a =
 -- >>> (+3) <$> Logger (listh [1,2]) 3
 -- Logger [1,2] 6
 instance Functor (Logger l) where
-  (<$>) =
-    error "todo: Course.StateT (<$>)#instance (Logger l)"
+  (<$>) :: (a -> b) -> Logger l a -> Logger l b
+  (<$>) g (Logger l x) = Logger l (g x)
 
 -- | Implement the `Applicative` instance for `Logger`.
 --
@@ -260,10 +260,11 @@ instance Functor (Logger l) where
 -- >>> Logger (listh [1,2]) (+7) <*> Logger (listh [3,4]) 3
 -- Logger [1,2,3,4] 10
 instance Applicative (Logger l) where
-  pure =
-    error "todo: Course.StateT pure#instance (Logger l)"
-  (<*>) =
-    error "todo: Course.StateT (<*>)#instance (Logger l)"
+  pure :: a -> Logger l a
+  pure x = Logger Nil x
+
+  (<*>) :: Logger l (a -> b) -> Logger l a -> Logger l b
+  (<*>) (Logger l1 g) (Logger l2 x) = Logger (l1 ++ l2) (g x)
 
 -- | Implement the `Monad` instance for `Logger`.
 -- The `bind` implementation must append log values to maintain associativity.
@@ -271,8 +272,8 @@ instance Applicative (Logger l) where
 -- >>> (\a -> Logger (listh [4,5]) (a+3)) =<< Logger (listh [1,2]) 3
 -- Logger [1,2,4,5] 6
 instance Monad (Logger l) where
-  (=<<) =
-    error "todo: Course.StateT (=<<)#instance (Logger l)"
+  (=<<) :: (a -> Logger l b) -> Logger l a -> Logger l b
+  (=<<) g (Logger l1 x) = let (Logger l2 y) = g x in Logger (l1 ++ l2) y
 
 -- | A utility function for producing a `Logger` with one log value.
 --
@@ -282,8 +283,7 @@ log1 ::
   l
   -> a
   -> Logger l a
-log1 =
-  error "todo: Course.StateT#log1"
+log1 x y = Logger (x :. Nil) y
 
 -- | Remove all duplicate integers from a list. Produce a log as you go.
 -- If there is an element above 100, then abort the entire computation and produce no result.
@@ -299,9 +299,18 @@ log1 =
 --
 -- >>> distinctG $ listh [1,2,3,2,6,106]
 -- Logger ["even number: 2","even number: 2","even number: 6","aborting > 100: 106"] Empty
+
+-- TODO: refactor log and stop with lift-like function
 distinctG ::
   (Integral a, Show a) =>
   List a
   -> Logger Chars (Optional (List a))
-distinctG =
-  error "todo: Course.StateT#distinctG"
+distinctG xs = runOptionalT $ evalT (filtering check xs) S.empty
+  where log x = StateT (\s' -> OptionalT (log1 x (Full ((), s'))))
+        stop x = StateT (\_ -> OptionalT (log1 x (Empty)))
+        msg m x = m ++ (listh $ show x)
+        logEven x = if even x then log (msg "even number: " x) else return ()
+        check x = getT >>= \s ->
+          putT (S.insert x s) >>
+            if x > 100 then stop (msg "aborting > 100: " x)
+            else logEven x >> return (not $ S.member x s)
