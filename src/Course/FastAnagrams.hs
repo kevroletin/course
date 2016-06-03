@@ -14,8 +14,15 @@ fastAnagrams ::
   Chars
   -> Filename
   -> IO (List Chars)
-fastAnagrams =
-  error "todo: Course.FastAnagrams#fastAnagrams"
+fastAnagrams pattern fileName = (fastAnagrams' pattern) <$> lines <$> readFile fileName
+
+fastAnagrams' ::
+  Chars
+  -> List Chars
+  -> List Chars
+fastAnagrams' pattern xs = filter (\x -> S.member x perms) xs
+  where
+    perms = S.fromList $ hlist (permutations pattern)
 
 newtype NoCaseString =
   NoCaseString {
