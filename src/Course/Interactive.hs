@@ -65,6 +65,9 @@ echo =
 data Op =
   Op Char Chars (IO ()) -- keyboard entry, description, program
 
+ask :: List Char -> IO Chars
+ask x = putStr ("Enter " ++ x ++ ": ") >- getLine
+
 -- |
 --
 -- * Ask the user to enter a string to convert to upper-case.
@@ -82,8 +85,7 @@ data Op =
 -- /Tip:/ @putStrLn :: String -> IO ()@ -- Prints a string and then a new line to standard output.
 convertInteractive ::
   IO ()
-convertInteractive =
-  error "todo: Course.Interactive#convertInteractive"
+convertInteractive = map toUpper <$> ask "a string: " >>= putStrLn
 
 -- |
 --
@@ -110,8 +112,9 @@ convertInteractive =
 -- /Tip:/ @putStrLn :: String -> IO ()@ -- Prints a string and then a new line to standard output.
 reverseInteractive ::
   IO ()
-reverseInteractive =
-  error "todo: Course.Interactive#reverseInteractive"
+reverseInteractive = ask "a file name to reverse" >>= \fin ->
+                       ask "a file name to write" >>= \fout ->
+                         (reverse <$> readFile fin) >>= writeFile fout
 
 -- |
 --
@@ -136,8 +139,12 @@ reverseInteractive =
 -- /Tip:/ @putStrLn :: String -> IO ()@ -- Prints a string and then a new line to standard output.
 encodeInteractive ::
   IO ()
-encodeInteractive =
-  error "todo: Course.Interactive#encodeInteractive"
+encodeInteractive = flatMap encode <$> ask "a string to url-encode" >>= putStrLn
+  where encode x = case x of
+                    ' ' -> "%20"
+                    '\t' -> "%09"
+                    '\"' -> "%22"
+                    _ -> x :. Nil
 
 interactive ::
   IO ()
