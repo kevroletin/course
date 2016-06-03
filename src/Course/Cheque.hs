@@ -1,3 +1,5 @@
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -187,7 +189,7 @@ data Digit =
   | Seven
   | Eight
   | Nine
-  deriving (Eq, Enum, Bounded)
+  deriving (Eq, Enum, Bounded, Show)
 
 showDigit ::
   Digit
@@ -218,7 +220,7 @@ data Digit3 =
   D1 Digit
   | D2 Digit Digit
   | D3 Digit Digit Digit
-  deriving Eq
+  deriving (Eq, Show)
 
 -- Possibly convert a character to a digit.
 fromChar ::
@@ -320,8 +322,90 @@ fromChar _ =
 --
 -- >>> dollars "456789123456789012345678901234567890123456789012345678901234567890.12"
 -- "four hundred and fifty-six vigintillion seven hundred and eighty-nine novemdecillion one hundred and twenty-three octodecillion four hundred and fifty-six septendecillion seven hundred and eighty-nine sexdecillion twelve quindecillion three hundred and forty-five quattuordecillion six hundred and seventy-eight tredecillion nine hundred and one duodecillion two hundred and thirty-four undecillion five hundred and sixty-seven decillion eight hundred and ninety nonillion one hundred and twenty-three octillion four hundred and fifty-six septillion seven hundred and eighty-nine sextillion twelve quintillion three hundred and forty-five quadrillion six hundred and seventy-eight trillion nine hundred and one billion two hundred and thirty-four million five hundred and sixty-seven thousand eight hundred and ninety dollars and twelve cents"
+
+parseDigits :: List Char -> (List Digit, List Digit)
+parseDigits str = let (left, right) = span (/= '.') str
+                  in ( toDigits $ withDefault "0" (filter isDigit left)
+                     , toDigits $ take 2 $ (filter isDigit right) ++ "00")
+  where withDefault a b = if isEmpty b then a else b
+        toDigits xs = case sequence (map fromChar xs) of
+                        Empty -> Zero :. Nil
+                        Full x -> x
+
+nthD :: Digit -> List t -> t
+nthD Zero (x :. _) = x
+nthD n (_ :. xs) = nthD (pred n) xs
+nthD _ Nil = error "nthD: index out of range"
+
+teens :: List Chars
+teens = listh
+        ["ten"
+        , "eleven"
+        , "twelve"
+        , "thirteen"
+        , "fourteen"
+        , "fifteen"
+        , "sixteen"
+        , "seventeen"
+        , "eighteen"
+        , "nineteen"]
+
+numerals2 :: List Chars
+numerals2 = listh
+            [ ""
+            , ""
+            , "twenty"
+            , "thirty"
+            , "forty"
+            , "fifty"
+            , "sixty"
+            , "seventy"
+            , "eighty"
+            , "ninety"]
+
+printGroup :: Digit3 -> Chars
+printGroup (D1 x) = showDigit x
+printGroup (D2 x y)
+  | x == Zero = printGroup (D1 y)
+  | x == One = nthD y teens
+  | y == Zero = (nthD x numerals2)
+  | otherwise = (nthD x numerals2) ++ "-" ++ (showDigit y)
+printGroup (D3 x y z)
+  | x == Zero = printGroup (D2 y z)
+  | otherwise = showDigit x ++ " hundred" ++ rest
+  where
+    rest = if (y, z) == (Zero, Zero) then ""
+           else " and " ++ printGroup (D2 y z)
+
+splitToGroups :: List Digit -> List Digit3
+splitToGroups Nil = Nil
+splitToGroups (a :. b :. c :. xs) = (D3 c b a) :. splitToGroups xs
+splitToGroups (a :. b :. xs) = (D2 b a) :. splitToGroups xs
+splitToGroups (a :. xs) = (D1 a) :. splitToGroups xs
+
+printNumber :: List Digit -> Chars
+printNumber xs = unwords $ reverse $ res
+  where
+    (y :. ys) = (splitToGroups (reverse xs)) `zip` illion
+    ys' = filter (not . isZero . fst) ys
+    res = (printGroup . fst $ y) :. map combine ys'
+    combine (a, b) = (printGroup a) ++ " " ++ b
+
+isZero :: Digit3 -> Bool
+isZero (D3 Zero Zero Zero) = True
+isZero (D2 Zero Zero) = True
+isZero (D1 Zero) = True
+isZero _ = False
+
+endsWith :: (Eq a) => a -> List a -> Bool
+endsWith a (b :. Nil) = a == b
+endsWith a (_ :. xs) = endsWith a xs
+endsWith _ Nil = False
+
 dollars ::
   Chars
   -> Chars
-dollars =
-  error "todo: Course.Cheque#dollars"
+dollars xs = let (d, c) = parseDigits xs
+                 ds = if endsWith One d then "dollar" else "dollars"
+                 cs = if endsWith One c then "cent" else "cents"
+             in unwords (printNumber d :. ds :. "and" :. printNumber c :. cs :. Nil)
