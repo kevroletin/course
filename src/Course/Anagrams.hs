@@ -32,13 +32,19 @@ anagrams ::
   Chars
   -> Filename
   -> IO (List Chars)
-anagrams =
-  error "todo: Course.Anagrams#anagrams"
+anagrams pattern fileName = (anagrams' pattern) <$> lines <$> readFile fileName
 
--- Compare two strings for equality, ignoring case
+anagrams' ::
+  Chars
+  -> List Chars
+  -> List Chars
+anagrams' pattern candidates = filter cmp candidates
+  where
+    cmp str = not $ isEmpty (intersectBy equalIgnoringCase (permutations str) (pattern :. Nil))
+
+-- Compare two strngs for equality, ignoring case
 equalIgnoringCase ::
   Chars
   -> Chars
   -> Bool
-equalIgnoringCase =
-  error "todo: Course.Anagrams#equalIgnoringCase"
+equalIgnoringCase a b = (map toLower a) == (map toLower b)
