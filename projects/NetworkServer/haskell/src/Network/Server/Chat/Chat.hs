@@ -53,5 +53,7 @@ chatCommand z =
 process ::
   ChatCommand
   -> Chat ()
-process =
-  error "todo"
+process (Chat str) = allClientsButThis ! str
+process Incr = do new <- incr
+                  allClients ! ">> " ++ show new
+process (Unknown z) = thisClient ! ">> unknown command: " ++ z

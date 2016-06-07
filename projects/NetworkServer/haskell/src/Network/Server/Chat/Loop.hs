@@ -83,12 +83,19 @@ server i r (Loop f) =
 allClients :: IOLoop v (Set Ref)
 allClients = Loop $ \env -> readIORef (clientsL `getL` env)
 
+thisClient :: IOLoop a (Set Ref)
+thisClient = Loop $ \env ->
+               return $ S.insert ((acceptL .@ refL) `getL` env) S.empty
+
 perClient ::
   IOLoop v x -- client accepted (post)
   -> (String -> IOLoop v a) -- read line from client
   -> IOLoop v ()
-perClient =
-  error "todo"
+perClient a r = a >> forever readline
+  where
+    readline = forever $ do env <- readEnv
+                            line <- liftIO $ lGetLine (acceptL `getL` env)
+                            r line
 
 loop ::
   IO w -- server initialise
